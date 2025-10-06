@@ -2,41 +2,66 @@
 #include <stdlib.h>
 #include <stdint.h>     //adds uint_32
 #include <inttypes.h>   //for formatting uint_32 so it can be printed
-#include <gmp.h>
-//compile with -lgmp
+#include <gmp.h>        //link with -lgmp
 #include <omp.h>        //openMP
 #include <time.h>       
-#include <math.h>
+#include <math.h>       //link with -lm
 
-void split_exponent(uint32_t n);
+
 void fib_long(int n);
 void fib_gmp(int n);
 
-unsigned int matrix_square(int n);
+int split_exponent(int n);
+int fib_fraction(int n);
+void matrix_square(int exp, mpz_t collect_values);
 //void fib_mat(int n);
 
-
-uint32_t exponent[32];
+int exponent[32];
 
 int main(int argc, char *argv[])
 {   
     if(argc != 2){
-        printf("kein Eingabeparameter!\n");
+        printf("missing input value!\n");
         return 0;    
     }
     int n = atoi(argv[1]);
     uint32_t a = (unsigned)atoi(argv[1]);
 
-    int actual = pow(2,n);
-    printf("%i th fib: ", actual);
-    matrix_square(n);
+    int fraction;
+    fraction = fib_fraction(split_exponent(a));
+    printf("fraction: %i\n",fraction);
 
-    //split_exponent(a);
-    //fib_long(n);
-    //fib_gmp(n);
-    //fib_mat(n);
+    mpz_t collect;
+    mpz_init(collect);
+    mpz_init_set_ui(collect, 1);
+    mpz_mul_ui(collect, collect, fraction);
+
+    for(int i=0; i<=26; i++)
+    {
+        if(exponent[i]>0){
+            matrix_square(exponent[i], collect);
+        }
+    }
+
+    printf("%i th fib: ", n);
+    gmp_printf("% Zd \n", collect);
+    mpz_clear(collect);
+}
+
+int fib_fraction(int n)
+{
+    int t1, t2, next;
+    t1 = 1;
+    t2 = 0;
+    next = 1;
     
-    //printf("n: %d\n", n);
+    for(int i = 1; i<=n; i++)
+    {   
+        next = t1 + t2;
+        t1 = t2;
+        t2 = next;
+    }
+    return next;
 }
 
 void fib_long(int n)
@@ -87,32 +112,33 @@ void fib_gmp(int n)
 }
 
 
-void split_exponent(uint32_t n)
+int split_exponent(int n)
 {    
+    int small_fraction = 0;
+
     for(int i=31; i >= 0; i--)
     {   
         if((n >> i)){
-            exponent[i] = i;
+            exponent[31-i] = i; 
             n -= 1 << i;
-            printf("value: %i \n", i);
+            //printf("value: %i \n", i);
         }
-    } 
-    
-    uint32_t a;
-    for(int k =0; k<32; k++)
-    {   
-        a = exponent[k];
-        printf("value: %zu \n", a);
     }
+    
+    for(int k = 27; k<=31; k++)
+        small_fraction += pow(2,exponent[k]);
+
+    return small_fraction;
 }
 
-unsigned int matrix_square(int n)
+
+void matrix_square(int exp, mpz_t collect_values)
 {
     //    |a b|  = |fn+1    fn|
     //    |c d|    |fn    fn-1|
 
     //n: 2¹=2  2²=4  2³=8  2⁴=16 
-//------------------------
+
     mpz_t a_x, b_x, d_x;
     mpz_init_set_ui(a_x, 1);
     mpz_init_set_ui(b_x, 1);
@@ -129,7 +155,7 @@ unsigned int matrix_square(int n)
     mpz_init(d_x_temp);
 
     int i;
-    for(i=1; i<=n; i++)
+    for(i=1; i<=exp; i++)
     {
         mpz_mul(a_x_temp, a_x, a_x);
         mpz_mul(b_x_temp, b_x, b_x);
@@ -154,11 +180,12 @@ unsigned int matrix_square(int n)
     mpz_clear(a_x_temp);
     mpz_clear(b_x_temp);
     mpz_clear(d_x_temp);
-    mpz_clear(a_y);
     mpz_clear(d_y);
-
     
-    gmp_printf("% Zd \n", b_y);
+    mpz_mul(collect_values, collect_values, b_y);
+    gmp_printf("b_y: %Zd \n", b_y);
+    
+    mpz_clear(a_y);
     mpz_clear(b_y);
 }
 
@@ -176,31 +203,7 @@ void fib_mat(int n)
     //    |c_n d_n| = (c_n*a + d_n*c)  (c_n*b + d_n*d)
     
 
-    unsigned long a = 1;
-    unsigned long b = 1;
-    unsigned long d = 0;
-
-    unsigned long a_temp;
-    unsigned long b_temp;
-    unsigned long d_temp;
-    int i;
-    
-    //clock_t begin = clock();
-    
-
-
-    //matrix mult for fib, a = fn+1 -> do n-1 loop iterations and return a to get value of fn
-    a_temp = a + b;
-    b_temp = a;
-    d_temp = b;
-
-    a = a_temp;
-    b = b_temp;
-    d = d_temp;
-    //printf("i: %d result: %lu\n",i,a);
-    //printf("result: %ld\n",a);
-        
-    
+    //clock_t begin = clock();  
     //clock_t end = clock();
     
     printf("result: %lu\n",a);
