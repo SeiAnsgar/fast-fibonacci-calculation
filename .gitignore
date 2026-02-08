@@ -1,2 +1,3 @@
 a.out
 copy.c
+fib_omp.c

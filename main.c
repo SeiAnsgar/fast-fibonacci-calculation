@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>     //adds uint_32
+#include <stdint.h>
 #include <inttypes.h>   //for formatting uint_32 so it can be printed
 #include <gmp.h>        //link with -lgmp
 #include <omp.h>        //openMP
@@ -17,7 +17,7 @@ typedef struct{
 int split_exponent(uint32_t n);
 void calculate_small_fraction(int i, Matrix *mf);
 void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop); //f: M x M -> M, (Ma, Mb) -> Ma*Mbs
-void matrix_mul_square(int exp, Matrix *set_m); //change Matrix  m to *m where *m points to collector matrix
+void matrix_mul_square(int exp, Matrix *set_m);
 
 void final_product(int fraction);
 
@@ -35,7 +35,6 @@ int main(int argc, char *argv[])
 
     a = (unsigned)atoi(argv[1]);
 
-    
     fraction = split_exponent(a);
     final_product(fraction);
 }
@@ -56,7 +55,6 @@ void matrix_mul_square(int exp, Matrix *set_m)
     {   
         //override eachother alternately -> no need to initalize m_init with m_temp after eacht iteration
         if(i%2){
-            //printf("i mod 2\n");
             matrix_mul(&m_init, &m_init, &m_temp);
             edited_most_recent = 1;
         }
@@ -66,13 +64,11 @@ void matrix_mul_square(int exp, Matrix *set_m)
         }   
     }
     if(edited_most_recent == 1){
-        //gmp_printf("matrix_square:%Zd \n", m_temp.b);
         mpz_set(set_m->a, m_temp.a);
         mpz_set(set_m->b, m_temp.b);
         mpz_set(set_m->d, m_temp.d);
     }
     else{
-        //gmp_printf("matrix_square:%Zd \n", m_init.b);
         mpz_set(set_m->a, m_init.a);
         mpz_set(set_m->b, m_init.b);
         mpz_set(set_m->d, m_init.d);
@@ -85,10 +81,6 @@ void matrix_mul_square(int exp, Matrix *set_m)
 
 void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop)
 {
-    //void mpz_addmul (mpz t rop, const mpz t op1, const mpz t op2)
-    
-    //gmp_printf("m1.a: %Zd \n", m1->a);
-    //gmp_printf("m2.a: %Zd \n", m2->a);
     int m1_is_rop = 0;
 
     if(m1 == rop){
@@ -115,9 +107,7 @@ void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop)
     }
     else{
         mpz_mul(rop->a, m1->a, m2->a);
-        //gmp_printf("rop.a: %Zd \n", rop->a);
         mpz_addmul(rop->a, m1->b, m2->b);
-        //gmp_printf("% Zd \n", rop.a);
 
         mpz_mul(rop->b, m1->a, m2->b);
         mpz_addmul(rop->b, m1->b, m2->d);
@@ -144,7 +134,6 @@ int split_exponent(uint32_t n)
             exponent[slot] = i; 
             n -= 1 << i;
             slot++;
-            //printf("value: %i \n", i);
         }
     }
     //separate small portion of input-number, matrix exponentiation is only worth it for large n
@@ -177,7 +166,6 @@ void calculate_small_fraction(int n, Matrix *mf)
         t1 = t2;
         t2 = next;
     }
-    //printf("small fration result t1:%i\n",t1);
     mpz_set_ui(mf->a,t2);
     mpz_set_ui(mf->b,t1);
     mpz_set_ui(mf->d,pre);
@@ -195,28 +183,11 @@ void final_product(int fraction)
     mpz_inits(tmp.a, tmp.b, tmp.d, NULL);
 
     calculate_small_fraction(fraction, &m_collector);
-    /*
-    printf("after calculate_small_fraction():\n");
-    gmp_printf("mcollector.a result:%Zd \n", m_collector.a);
-    gmp_printf("mcollector.b result:%Zd \n", m_collector.b);
-    gmp_printf("mcollector.d result:%Zd \n", m_collector.d);
-    */
     
-
     for(int i = 0; i<=31; i++)
     {
         if(exponent[i]>=4){
-            //printf("i:%i  exponent[i]: %i\n", i, exponent[i]);
-
             matrix_mul_square(exponent[i], &tmp);
-            /*
-            printf("after matrix_mul_square():\n");
-            gmp_printf("temp.a result:%Zd \n", tmp.a);
-            gmp_printf("temp.b result:%Zd \n", tmp.b);
-            gmp_printf("temp.d result:%Zd \n", tmp.d);
-            */
-            
-
             matrix_mul(&m_collector, &tmp, &m_collector);
         }
         else
