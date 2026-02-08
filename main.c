@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <inttypes.h>   //for formatting uint_32 so it can be printed
 #include <gmp.h>        //link with -lgmp
-#include <omp.h>        //openMP
+#include <omp.h>        //link with -fopenmp
 #include <time.h>       
 #include <math.h>       //link with -lm
 
@@ -19,7 +19,7 @@ void calculate_small_fraction(int i, Matrix *mf);
 void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop); //f: M x M -> M, (Ma, Mb) -> Ma*Mbs
 void matrix_mul_square(int exp, Matrix *set_m);
 
-void final_product(int fraction);
+void final_product(int fraction, uint32_t size);
 
 int exponent[32];
 
@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
     a = (unsigned)atoi(argv[1]);
 
     fraction = split_exponent(a);
-    final_product(fraction);
+    final_product(fraction, a);
 }
 
 void matrix_mul_square(int exp, Matrix *set_m)
@@ -64,11 +64,13 @@ void matrix_mul_square(int exp, Matrix *set_m)
         }   
     }
     if(edited_most_recent == 1){
+        
         mpz_set(set_m->a, m_temp.a);
         mpz_set(set_m->b, m_temp.b);
         mpz_set(set_m->d, m_temp.d);
     }
     else{
+        
         mpz_set(set_m->a, m_init.a);
         mpz_set(set_m->b, m_init.b);
         mpz_set(set_m->d, m_init.d);
@@ -146,8 +148,7 @@ int split_exponent(uint32_t n)
             break;
     }
     small_fraction += power_zero;
-        
-    printf("small_fraction:%i \n",small_fraction);
+
     return small_fraction;
 }
 
@@ -172,7 +173,7 @@ void calculate_small_fraction(int n, Matrix *mf)
 }
 
 
-void final_product(int fraction)
+void final_product(int fraction, uint32_t size)
 {   
     clock_t begin = clock();
 
@@ -183,16 +184,26 @@ void final_product(int fraction)
     mpz_inits(tmp.a, tmp.b, tmp.d, NULL);
 
     calculate_small_fraction(fraction, &m_collector);
-    
-    for(int i = 0; i<=31; i++)
+ 
+    int filled = 0;
+    for(int j = 0; j<=31; j++)
     {
-        if(exponent[i]>=4){
-            matrix_mul_square(exponent[i], &tmp);
-            matrix_mul(&m_collector, &tmp, &m_collector);
-        }
-        else
-            break;
+        if(exponent[j]>=4)
+            filled++;
     }
+
+    omp_set_num_threads(4);
+    #pragma omp parallel for schedule(static,1) if(size> 10000000) 
+        for(int i = 0; i<=filled; i++)
+        {
+            matrix_mul_square(exponent[i], &tmp);
+            
+            #pragma omp critical
+            {
+                matrix_mul(&m_collector, &tmp, &m_collector);
+            }
+        }
+        
     clock_t end = clock();
     double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
 

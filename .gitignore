@@ -1,3 +1,5 @@
 a.out
+b.out
 copy.c
 fib_omp.c
+main_old.c
