@@ -7,233 +7,227 @@
 #include <time.h>       
 #include <math.h>       //link with -lm
 
+typedef struct{
+    mpz_t a,b,d;
+    //-> fn+1 fn fn-1
+}Matrix;
+//    |a b|  = |fn+1    fn|
+//    |c d|    |fn    fn-1|
 
-void fib_long(int n);
-void fib_gmp(int n);
+int split_exponent(uint32_t n);
+void calculate_small_fraction(int i, Matrix *mf);
+void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop); //f: M x M -> M, (Ma, Mb) -> Ma*Mbs
+void matrix_mul_square(int exp, Matrix *set_m); //change Matrix  m to *m where *m points to collector matrix
 
-int split_exponent(int n);
-int fib_fraction(int n);
-void matrix_square(int exp, mpz_t collect_values);
-//void fib_mat(int n);
+void final_product(int fraction);
 
 int exponent[32];
 
 int main(int argc, char *argv[])
 {   
+    int fraction;
+    uint32_t a;
+
     if(argc != 2){
-        printf("missing input value!\n");
+        printf("Missing input value!\n");
         return 0;    
     }
-    int n = atoi(argv[1]);
-    uint32_t a = (unsigned)atoi(argv[1]);
 
-    int fraction;
-    fraction = fib_fraction(split_exponent(a));
-    printf("fraction: %i\n",fraction);
+    a = (unsigned)atoi(argv[1]);
 
-    mpz_t collect;
-    mpz_init(collect);
-    mpz_init_set_ui(collect, 1);
-    mpz_mul_ui(collect, collect, fraction);
+    
+    fraction = split_exponent(a);
+    final_product(fraction);
+}
 
-    for(int i=0; i<=26; i++)
-    {
-        if(exponent[i]>0){
-            matrix_square(exponent[i], collect);
+void matrix_mul_square(int exp, Matrix *set_m)
+{   
+    Matrix m_init;
+    mpz_init_set_ui(m_init.a, 1);
+    mpz_init_set_ui(m_init.b, 1);
+    mpz_init_set_ui(m_init.d, 0);
+
+    Matrix m_temp;
+    mpz_inits(m_temp.a, m_temp.b, m_temp.d, NULL);
+
+    int edited_most_recent = 0;
+
+    for(int i=1; i<=exp; i++)
+    {   
+        //override eachother alternately -> no need to initalize m_init with m_temp after eacht iteration
+        if(i%2){
+            //printf("i mod 2\n");
+            matrix_mul(&m_init, &m_init, &m_temp);
+            edited_most_recent = 1;
         }
+        else{
+            matrix_mul(&m_temp, &m_temp, &m_init);
+            edited_most_recent = 2;
+        }   
     }
-
-    printf("%i th fib: ", n);
-    gmp_printf("% Zd \n", collect);
-    mpz_clear(collect);
+    if(edited_most_recent == 1){
+        //gmp_printf("matrix_square:%Zd \n", m_temp.b);
+        mpz_set(set_m->a, m_temp.a);
+        mpz_set(set_m->b, m_temp.b);
+        mpz_set(set_m->d, m_temp.d);
+    }
+    else{
+        //gmp_printf("matrix_square:%Zd \n", m_init.b);
+        mpz_set(set_m->a, m_init.a);
+        mpz_set(set_m->b, m_init.b);
+        mpz_set(set_m->d, m_init.d);
+    }
+        
+    mpz_clears(m_init.a, m_init.b, m_init.d, NULL);
+    mpz_clears(m_temp.a, m_temp.b, m_temp.d, NULL);
 }
 
-int fib_fraction(int n)
+
+void matrix_mul(Matrix *m1, Matrix *m2, Matrix *rop)
 {
-    int t1, t2, next;
-    t1 = 1;
-    t2 = 0;
-    next = 1;
+    //void mpz_addmul (mpz t rop, const mpz t op1, const mpz t op2)
     
-    for(int i = 1; i<=n; i++)
-    {   
-        next = t1 + t2;
-        t1 = t2;
-        t2 = next;
+    //gmp_printf("m1.a: %Zd \n", m1->a);
+    //gmp_printf("m2.a: %Zd \n", m2->a);
+    int m1_is_rop = 0;
+
+    if(m1 == rop){
+
+        Matrix tmp;
+
+        m1_is_rop = 1;
+
+        mpz_inits(tmp.a, tmp.b, tmp.d, NULL);
+        mpz_set(tmp.a, m1->a);
+        mpz_set(tmp.b, m1->b);
+        mpz_set(tmp.d, m1->d);
+
+        mpz_mul(rop->a, tmp.a, m2->a);
+        mpz_addmul(rop->a, tmp.b, m2->b);
+
+        mpz_mul(rop->b, tmp.a, m2->b);
+        mpz_addmul(rop->b, tmp.b, m2->d);
+
+        mpz_mul(rop->d, tmp.b, m2->b);
+        mpz_addmul(rop->d, tmp.d, m2->d);
+
+        mpz_clears(tmp.a, tmp.b, tmp.d, NULL);
     }
-    return next;
-}
+    else{
+        mpz_mul(rop->a, m1->a, m2->a);
+        //gmp_printf("rop.a: %Zd \n", rop->a);
+        mpz_addmul(rop->a, m1->b, m2->b);
+        //gmp_printf("% Zd \n", rop.a);
 
-void fib_long(int n)
-{
-    unsigned long t1, t2, next;
-    t1 = 1;
-    t2 = 0;
-    next = 1;
-    int i;
+        mpz_mul(rop->b, m1->a, m2->b);
+        mpz_addmul(rop->b, m1->b, m2->d);
 
-    for(i = 1; i<=n; i++)
-    {   
-        next = t1 + t2;
-        printf("n: %d result: %lu\n", i, next);
-        t1 = t2;
-        t2 = next;
+        mpz_mul(rop->d, m1->b, m2->b);
+        mpz_addmul(rop->d, m1->d, m2->d);
     }
-    printf("result: %lu\n", next);
-}
-
-void fib_gmp(int n)
-{
-    mpz_t g1, g2, gnext;
-    mpz_init_set_ui(g1,1);
-    mpz_init_set_ui(g2,0);
-    mpz_init(gnext);
-
-    clock_t begin = clock();
-
-    long int i;
-    for(i=1; i<=n; i++)
-    {   
-        mpz_add(gnext, g1, g2);
-        mpz_set(g1, g2);
-        mpz_set(g2, gnext);
-    }
-
-    mpz_clear(g1);
-    mpz_clear(g2);
-    
-    clock_t end = clock();
-
-    gmp_printf("% Zd \n", gnext);
-    mpz_clear(gnext);
-
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("exec_time: %f \n", time_spent);
 }
 
 
-int split_exponent(int n)
+int split_exponent(uint32_t n)
 {    
     int small_fraction = 0;
+    int slot = 0;
+    int power_zero = 0;
+    
+    //check if 2⁰ bit exists
+    if(n%2)
+        power_zero=1;
 
     for(int i=31; i >= 0; i--)
     {   
         if((n >> i)){
-            exponent[31-i] = i; 
+            exponent[slot] = i; 
             n -= 1 << i;
+            slot++;
             //printf("value: %i \n", i);
         }
     }
-    
-    for(int k = 27; k<=31; k++)
-        small_fraction += pow(2,exponent[k]);
-
+    //separate small portion of input-number, matrix exponentiation is only worth it for large n
+    for(int k = 0; k<=31; k++)
+    {   
+        if(exponent[k] && exponent[k] < 4){
+            small_fraction += pow(2,exponent[k]);
+        }
+        else if(exponent[k] == 0)
+            break;
+    }
+    small_fraction += power_zero;
+        
+    printf("small_fraction:%i \n",small_fraction);
     return small_fraction;
 }
 
 
-void matrix_square(int exp, mpz_t collect_values)
-{
-    //    |a b|  = |fn+1    fn|
-    //    |c d|    |fn    fn-1|
-
-    //n: 2¹=2  2²=4  2³=8  2⁴=16 
-
-    mpz_t a_x, b_x, d_x;
-    mpz_init_set_ui(a_x, 1);
-    mpz_init_set_ui(b_x, 1);
-    mpz_init_set_ui(d_x, 0);
-    
-    mpz_t a_y, b_y, d_y;
-    mpz_init(a_y);
-    mpz_init(b_y);
-    mpz_init(d_y);
-
-    mpz_t a_x_temp, b_x_temp, d_x_temp;
-    mpz_init(a_x_temp);
-    mpz_init(b_x_temp);
-    mpz_init(d_x_temp);
-
-    int i;
-    for(i=1; i<=exp; i++)
-    {
-        mpz_mul(a_x_temp, a_x, a_x);
-        mpz_mul(b_x_temp, b_x, b_x);
-        mpz_add(a_y, a_x_temp, b_x_temp);
-
-        mpz_mul(a_x_temp, a_x, b_x);
-        mpz_mul(b_x_temp, b_x, d_x);
-        mpz_add(b_y, a_x_temp, b_x_temp);
-        
-        mpz_mul(b_x_temp, b_x, b_x);
-        mpz_mul(d_x_temp, d_x, d_x);
-        mpz_add(d_y, b_x_temp, d_x_temp);
-      
-        mpz_set(a_x, a_y);
-        mpz_set(b_x, b_y);
-        mpz_set(d_x, d_y);
-    }
-
-    mpz_clear(a_x);
-    mpz_clear(b_x);
-    mpz_clear(d_x);
-    mpz_clear(a_x_temp);
-    mpz_clear(b_x_temp);
-    mpz_clear(d_x_temp);
-    mpz_clear(d_y);
-    
-    mpz_mul(collect_values, collect_values, b_y);
-    gmp_printf("b_y: %Zd \n", b_y);
-    
-    mpz_clear(a_y);
-    mpz_clear(b_y);
-}
-
-
-/*
-void fib_mat(int n)
+void calculate_small_fraction(int n, Matrix *mf)
 {   
-    
-    //    |a b|  = |fn+1    fn|
-    //    |c d|    |fn    fn-1|
-    //
-    //              |a b|
-    //            * |c d| 
-    //    |a_n b_n| = (a*a_n + b_n*c)  (a_n*b + b_n*d)
-    //    |c_n d_n| = (c_n*a + d_n*c)  (c_n*b + d_n*d)
-    
+    unsigned long i, t1, t2, next, pre;
+    t1 = 1;
+    t2 = 0;
+    next = 1;
 
-    //clock_t begin = clock();  
-    //clock_t end = clock();
-    
-    printf("result: %lu\n",a);
-    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
-    printf("exec_time: %f \n", time_spent);
-}
-*/
-
-
-/*
-int a_x = 1;
-    int b_x = 1;
-    //int c_x = 1;
-    int d_x = 0;
-    int a_y, b_y, c_y, d_y;
-    
-    int i;
-    for(i=1; i<=n; i++)
+    for(i=1; i<=n+1; i++)
     {
-        a_y = a_x*a_x + b_x*b_x;
-        b_y = a_x*b_x + b_x*d_x;
-        //c_y = c_x*a_x + d_x*c_x;
-        c_y = b_y;
-        d_y = b_x*b_x + d_x*d_x;
+        pre = t1;
+        next = t1 + t2;
+        t1 = t2;
+        t2 = next;
+    }
+    //printf("small fration result t1:%i\n",t1);
+    mpz_set_ui(mf->a,t2);
+    mpz_set_ui(mf->b,t1);
+    mpz_set_ui(mf->d,pre);
+}
 
-        a_x = a_y;
-        b_x = b_y;
-        //c_x = c_y;
-        d_x = d_y; 
-        printf("%dth fib: %u \n", i, b_x);
-    } 
 
-*/
+void final_product(int fraction)
+{   
+    clock_t begin = clock();
+
+    Matrix m_collector;
+    mpz_inits(m_collector.a, m_collector.b, m_collector.d, NULL);
+
+    Matrix tmp;
+    mpz_inits(tmp.a, tmp.b, tmp.d, NULL);
+
+    calculate_small_fraction(fraction, &m_collector);
+    /*
+    printf("after calculate_small_fraction():\n");
+    gmp_printf("mcollector.a result:%Zd \n", m_collector.a);
+    gmp_printf("mcollector.b result:%Zd \n", m_collector.b);
+    gmp_printf("mcollector.d result:%Zd \n", m_collector.d);
+    */
+    
+
+    for(int i = 0; i<=31; i++)
+    {
+        if(exponent[i]>=4){
+            //printf("i:%i  exponent[i]: %i\n", i, exponent[i]);
+
+            matrix_mul_square(exponent[i], &tmp);
+            /*
+            printf("after matrix_mul_square():\n");
+            gmp_printf("temp.a result:%Zd \n", tmp.a);
+            gmp_printf("temp.b result:%Zd \n", tmp.b);
+            gmp_printf("temp.d result:%Zd \n", tmp.d);
+            */
+            
+
+            matrix_mul(&m_collector, &tmp, &m_collector);
+        }
+        else
+            break;
+    }
+    clock_t end = clock();
+    double time_spent = (double)(end - begin) / CLOCKS_PER_SEC;
+
+    gmp_printf("Final result:%Zd \n", m_collector.b);
+    printf("\nexec_time: %f \n", time_spent);
+
+    mpz_clears(m_collector.a, m_collector.b, m_collector.d, NULL);
+    mpz_clears(tmp.a, tmp.b, tmp.d, NULL);
+}
